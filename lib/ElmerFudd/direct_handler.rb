@@ -2,12 +2,15 @@ module ElmerFudd
   class DirectHandler
     include Filter
     attr_reader :route
+    attr_accessor :call_reply_content_type
 
     def initialize(route, callback, filters, options)
       @route = route
       @callback = callback
       @filters = filters
       @durable = options.fetch(:durable)
+      @call_reply_content_type = ElmerFudd::DEFAULT_CONTENT_TYPE
+      initialize_filters
     end
 
     def queue(env)
@@ -32,11 +35,16 @@ module ElmerFudd
     end
 
     def call(env, message)
-      env.logger.debug "ElmerFudd DirectHandler.call queue_name: #{@route.queue_name}, exchange_name: #{@route.exchange_name}, filters: #{filters_names}, message: #{message.payload}"
+      env.logger.debug "ElmerFudd #{self.class.name}.call (#{object_id}) queue_name: #{@route.queue_name}, exchange_name: #{@route.exchange_name}, filters: #{filters_names}, message: #{message.payload}"
       call_next(env, message, @filters + [@callback])
     end
 
     private
+
+    def initialize_filters
+      @filters.select { |filter| filter.respond_to?(:setup) }.
+        each { |filter| filter.setup(self) }
+    end
 
     def filters_names
       @filters.map { |f| f.respond_to?(:name) ? f.name : f.class.name }
